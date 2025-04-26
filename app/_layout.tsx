@@ -1,48 +1,61 @@
-import { Slot, useRouter } from 'expo-router';
+// app/_layout.tsx
+import { Slot, SplashScreen, useRouter, useSegments } from 'expo-router';
 import { View, Text } from 'react-native';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import { AuthProvider, useAuth } from '../src/context/AuthContext'; // Adjust path
 
-export default function RootLayout() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false); // Replace with actual auth logic
-  const [loading, setLoading] = useState(true);
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync();
+
+function InitialLayout() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    const checkAuth = async () => {
-      console.log('Checking authentication...');
-      const token = await fakeAuthCheck(); // Replace with your auth logic
-      console.log('Token:', token);
-      console.log('Is Authenticated:', !!token);
+    if (!isLoading) {
+      console.log('InitialLayout: Auth loading finished. isAuthenticated:', isAuthenticated);
+      const inAuthGroup = segments[0] === '(auth)';
 
-      setIsAuthenticated(!!token);
-
-      if (!token) {
-        console.log('Redirecting to login...');
-        router.replace('/(auth)/login'); // Redirect to login if not authenticated
+      if (isAuthenticated && !isLoading) {
+         // If the user is signed in, redirect them to the main app
+         console.log('InitialLayout: User authenticated, ensuring navigation to (tabs)');
+         router.replace('/(tabs)'); // Or your main app group
+      } else if (!isAuthenticated && !isLoading && !inAuthGroup) {
+        // If the user is not signed in and not in the auth group, redirect to login
+        console.log('InitialLayout: User not authenticated, ensuring navigation to (auth)/login');
+        router.replace('/(auth)/login');
+      } else {
+          console.log('InitialLayout: Navigation state is already correct or staying within auth group.');
       }
+      // Hide the splash screen after navigation logic
+      SplashScreen.hideAsync();
+    } else {
+        console.log('InitialLayout: Still loading auth state...');
+    }
+  }, [isAuthenticated, isLoading, segments, router]);
 
-      setLoading(false); // Mark loading as complete
-    };
 
-    checkAuth();
-  }, [router]);
-
-  if (loading) {
-    // Show a loading screen while checking authentication
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text>Loading...</Text>
-      </View>
-    );
+  // Show loading screen or null while determining auth state and navigating
+  if (isLoading) {
+     // You can return a dedicated loading component here if you prefer
+     return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <Text>Loading App...</Text>
+        </View>
+     );
   }
 
-  // Always render the Slot component
+  // Render the Slot for Expo Router to handle nested routes
+  console.log("InitialLayout: Rendering Slot...");
   return <Slot />;
 }
 
-// Simulated authentication check (replace with real logic)
-const fakeAuthCheck = async () => {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(false), 1000); // Simulate no token (not authenticated)
-  });
-};
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <InitialLayout />
+    </AuthProvider>
+  );
+}
